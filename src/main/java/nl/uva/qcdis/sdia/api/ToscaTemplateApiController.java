@@ -15,11 +15,15 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.validation.Valid;
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
+import nl.uva.qcdis.sdia.model.Exceptions.MissingVMTopologyException;
 import nl.uva.qcdis.sdia.model.Exceptions.TypeExeption;
-import nl.uva.qcdis.sdia.service.DRIPService;
+import nl.uva.qcdis.sdia.model.tosca.ToscaTemplate;
+import nl.uva.qcdis.sdia.service.SDIAService;
 import nl.uva.qcdis.sdia.service.ToscaTemplateService;
 import nl.uva.qcdis.sdia.sure.tosca.client.ApiException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +44,7 @@ public class ToscaTemplateApiController implements ToscaTemplateApi {
     private ToscaTemplateService toscaTemplateService;
 
     @Autowired
-    private DRIPService dripService;
+    private SDIAService dripService;
 
     @org.springframework.beans.factory.annotation.Autowired
     public ToscaTemplateApiController(ObjectMapper objectMapper, HttpServletRequest request) {
@@ -62,6 +66,8 @@ public class ToscaTemplateApiController implements ToscaTemplateApi {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (NotFoundException ex) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        } catch (MissingVMTopologyException ex) {
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
 //        } else {
 //            return new ResponseEntity<>(HttpStatus.NOT_ACCEPTABLE);
@@ -81,6 +87,8 @@ public class ToscaTemplateApiController implements ToscaTemplateApi {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (NotFoundException ex) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        } catch (MissingVMTopologyException ex) {
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -153,6 +161,25 @@ public class ToscaTemplateApiController implements ToscaTemplateApi {
 //        } else {
 //            return new ResponseEntity<>(HttpStatus.NOT_ACCEPTABLE);
 //        }
+
+    }
+
+    @Override
+    public ResponseEntity<List<String>> getToscaTemplateID(@RequestParam(required = false) 
+            String nodeType, @RequestParam(required = false) String currentState) {
+        try {
+            Map<String, String> filters = new HashMap<>();
+            if (nodeType != null) {
+                filters.put("nodeType", nodeType);
+            }
+            if (currentState != null) {
+                filters.put("currentState", currentState);
+            }
+            return new ResponseEntity<>(toscaTemplateService.findNodeIDs(filters), HttpStatus.OK);
+        } catch (JsonProcessingException ex) {
+            java.util.logging.Logger.getLogger(ToscaTemplateApiController.class.getName()).log(Level.SEVERE, null, ex);
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
 
     }
 
