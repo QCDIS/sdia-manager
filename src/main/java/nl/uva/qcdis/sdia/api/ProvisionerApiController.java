@@ -14,8 +14,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import javax.servlet.http.HttpServletRequest;
 import nl.uva.qcdis.sdia.model.Exceptions.MissingCredentialsException;
 import nl.uva.qcdis.sdia.model.Exceptions.MissingVMTopologyException;
+import nl.uva.qcdis.sdia.model.Exceptions.SIDIAExeption;
 import nl.uva.qcdis.sdia.model.Exceptions.TypeExeption;
-import nl.uva.qcdis.sdia.service.DRIPService;
+import nl.uva.qcdis.sdia.service.SDIAService;
 import nl.uva.qcdis.sdia.sure.tosca.client.ApiException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -33,7 +34,7 @@ public class ProvisionerApiController implements ProvisionerApi {
     private final HttpServletRequest request;
 
     @Autowired
-    private DRIPService dripService;
+    private SDIAService dripService;
 
     @org.springframework.beans.factory.annotation.Autowired
     public ProvisionerApiController(ObjectMapper objectMapper, HttpServletRequest request) {
@@ -47,16 +48,19 @@ public class ProvisionerApiController implements ProvisionerApi {
             @PathVariable("id") String id) {
 //        String accept = request.getHeader("Accept");
 //        if (accept != null && accept.contains("text/plain")) {
-            try {
-                String planedYemplateId = dripService.provision(id);
-                return new ResponseEntity<>(planedYemplateId, HttpStatus.OK);
-            } catch (ApiException | TypeExeption | IOException | TimeoutException | InterruptedException | NotFoundException ex) {
-                java.util.logging.Logger.getLogger(ProvisionerApiController.class.getName()).log(Level.SEVERE, null, ex);
-                return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-            } catch (MissingCredentialsException | MissingVMTopologyException ex) {
-                java.util.logging.Logger.getLogger(ProvisionerApiController.class.getName()).log(Level.SEVERE, null, ex);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
-            }
+        try {
+            String planedYemplateId = dripService.provision(id);
+            java.util.logging.Logger.getLogger(ProvisionerApiController.class.getName()).log(Level.INFO, "Returning ID: {0}", planedYemplateId);
+            return new ResponseEntity<>(planedYemplateId, HttpStatus.OK);
+        } catch (ApiException | TypeExeption | IOException | TimeoutException | InterruptedException | NotFoundException ex) {
+            java.util.logging.Logger.getLogger(ProvisionerApiController.class.getName()).log(Level.SEVERE, null, ex);
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (MissingCredentialsException | MissingVMTopologyException ex) {
+            java.util.logging.Logger.getLogger(ProvisionerApiController.class.getName()).log(Level.SEVERE, null, ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
+        } catch (SIDIAExeption ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
+        }
 //        } else {
 //            return new ResponseEntity<>(HttpStatus.NOT_ACCEPTABLE);
 //        }

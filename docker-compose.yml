@@ -1,0 +1,33 @@
+version: '3'
+services:
+
+  rabbit:
+    restart: unless-stopped
+    hostname: rabbit
+    image: rabbitmq:3.8-management
+    ports:
+      - "5671-5672:5671-5672"
+      - "15672:15672"
+      - "4369:4369"
+      - "15671:15671"
+
+  mongo:
+    restart: unless-stopped
+    image: mongo:4
+    ports:
+      - "27017:27017"
+
+  sure-tosca:
+    restart: unless-stopped
+    image:  qcdis/sure-tosca:1.0.2
+    ports:
+      - "8081:8081"
+
+  planner:
+    restart: unless-stopped
+    depends_on:
+      - rabbit
+    image: qcdis/sdia-infrastructure-planner:1.0.4
+    environment:
+      RABBITMQ_HOST: rabbit
+

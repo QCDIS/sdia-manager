@@ -30,6 +30,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URL;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
@@ -83,7 +84,7 @@ public class ServiceTests {
     ToscaTemplateService toscaTemplateService;
 
     @Autowired
-    DRIPService dripService;
+    SDIAService dripService;
 
     @Value("${message.broker.queue.provisioner}")
     private String provisionerQueueName;
@@ -180,7 +181,7 @@ public class ServiceTests {
     public void testToscaTemplateServiceSaveFile() throws Exception {
         Logger.getLogger(ServiceTests.class.getName()).log(Level.INFO, "saveFile");
 
-        FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/application_example_updated.yaml"));
+        FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/articonf/TIC_ec2_wf_with_bank.yaml"));
         MultipartFile file = new MockMultipartFile("file", in);
         toscaTemplateID = toscaTemplateService.saveFile(file);
         Assert.assertNotNull(toscaTemplateID);
@@ -199,7 +200,7 @@ public class ServiceTests {
             if (toscaTemplateID == null) {
                 testToscaTemplateServiceSaveFile();
             }
-            in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/application_example_updated.yaml"));
+            in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/articonf/TIC_ec2_wf_with_bank.yaml"));
             MultipartFile file = new MockMultipartFile("file", in);
             String expResult = toscaTemplateID;
             String result = toscaTemplateService.updateToscaTemplateByID(toscaTemplateID, file);
@@ -230,7 +231,7 @@ public class ServiceTests {
      */
     @Test
     public void testToscaTemplateServiceUpdateToscaTemplateByID_Exception_MultipartFile() throws FileNotFoundException, IOException {
-        FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/application_example_updated.yaml"));
+        FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/articonf/TIC_ec2_wf_with_bank.yaml"));
         MultipartFile file = new MockMultipartFile("file", in);
         try {
             toscaTemplateService.updateToscaTemplateByID("0", file);
@@ -270,8 +271,8 @@ public class ServiceTests {
     public void testToscaTemplateServiceDeleteByID() {
         if (ToscaHelper.isServiceUp(sureToscaBasePath)) {
             try {
-                Logger.getLogger(ServiceTests.class.getName()).log(Level.INFO, "deleteByID");
-                FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/application_example_updated.yaml"));
+                Logger.getLogger(ServiceTests.class.getName()).log(Level.INFO, "testToscaTemplateServiceDeleteByID");
+                FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/articonf/TIC_ec2_wf_with_bank.yaml"));
                 MultipartFile file = new MockMultipartFile("file", in);
                 String id = toscaTemplateService.saveFile(file);
                 Assert.assertNotNull(id);
@@ -286,7 +287,109 @@ public class ServiceTests {
 
             }
         }
+    }
 
+    /**
+     * Test of deleteByID method, of class ToscaTemplateService.
+     *
+     * @throws java.io.IOException
+     * @throws com.fasterxml.jackson.core.JsonProcessingException
+     * @throws nl.uva.qcdis.sdia.api.NotFoundException
+     */
+    @Test
+    public void testToscaTemplateServiceFindNodeIDs() throws IOException, JsonProcessingException, NotFoundException {
+
+        Logger.getLogger(ServiceTests.class.getName()).log(Level.INFO, "testToscaTemplateServiceFindNodeIDs");
+        FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/application_example_provisioned.yaml"));
+        MultipartFile file = new MockMultipartFile("file", in);
+        String id = toscaTemplateService.saveFile(file);
+        Assert.assertNotNull(id);
+        Map<String, String> filters = new HashMap<>();
+        String nodeType = "tosca.nodes.QC.VM.topology";
+
+        filters.put("nodeType", nodeType);
+
+        List<String> ids = toscaTemplateService.findNodeIDs(filters);
+        Assert.assertNotNull(id);
+        Assert.assertTrue(ids.size() >= 1);
+        Assert.assertTrue(ids.contains(id));
+        boolean foundType = false;
+        for (String toscaID : ids) {
+            if (toscaID.equals(id)) {
+                ToscaTemplate tt = toscaTemplateService.findToscaTemplateByID(id);
+                Map<String, NodeTemplate> nt = tt.getTopologyTemplate().getNodeTemplates();
+                Set<String> names = nt.keySet();
+                for (String name : names) {
+                    NodeTemplate node = nt.get(name);
+                    if (node.getType().equals(nodeType)) {
+                        foundType = true;
+                        break;
+                    }
+                }
+            }
+        }
+        Assert.assertTrue(foundType);
+
+        filters = new HashMap<>();
+        String currentState = "RUNNING";
+        filters.put("currentState", currentState);
+        ids = toscaTemplateService.findNodeIDs(filters);
+        Assert.assertNotNull(id);
+        Assert.assertTrue(ids.size() >= 1);
+        Assert.assertTrue(ids.contains(id));
+        boolean foundTState = false;
+
+        for (String toscaID : ids) {
+            if (toscaID.equals(id)) {
+                ToscaTemplate tt = toscaTemplateService.findToscaTemplateByID(id);
+                Map<String, NodeTemplate> nt = tt.getTopologyTemplate().getNodeTemplates();
+                Set<String> names = nt.keySet();
+                for (String name : names) {
+                    NodeTemplate node = nt.get(name);
+                    if (node.getAttributes() != null
+                            && node.getAttributes().containsKey("current_state")
+                            && node.getAttributes().get("current_state").equals(currentState)) {
+                        foundTState = true;
+                        break;
+                    }
+                }
+            }
+        }
+        Assert.assertTrue(foundTState);
+
+        filters = new HashMap<>();
+        currentState = "RUNNING";
+        filters.put("currentState", currentState);
+        filters.put("nodeType", nodeType);
+
+        ids = toscaTemplateService.findNodeIDs(filters);
+        Assert.assertNotNull(id);
+        Assert.assertTrue(ids.size() >= 1);
+        Assert.assertTrue(ids.contains(id));
+        foundTState = false;
+        foundType = false;
+        for (String toscaID : ids) {
+            if (toscaID.equals(id)) {
+                ToscaTemplate tt = toscaTemplateService.findToscaTemplateByID(id);
+                Map<String, NodeTemplate> nt = tt.getTopologyTemplate().getNodeTemplates();
+                Set<String> names = nt.keySet();
+                for (String name : names) {
+                    NodeTemplate node = nt.get(name);
+                    if (node.getAttributes() != null
+                            && node.getAttributes().containsKey("current_state")
+                            && node.getAttributes().get("current_state").equals(currentState)) {
+                        foundTState = true;
+                    }
+                    if (node.getType().equals(nodeType)) {
+                        foundType = true;
+                        break;
+                    }
+                }
+            }
+
+        }
+        Assert.assertTrue(foundTState);
+        Assert.assertTrue(foundType);
     }
 
     /**
@@ -317,7 +420,7 @@ public class ServiceTests {
      * Test of save method, of class CredentialService.
      */
     @Test
-    public void testCredentialServiceSave() throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+    public void testCredentialServiceSave() throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException {
         Logger.getLogger(ServiceTests.class.getName()).log(Level.INFO, "save");
         saveCredential();
     }
@@ -339,9 +442,9 @@ public class ServiceTests {
         String keyStoreEncodedFromCredential = credential.getKeys().get("keystore");
         assertEquals(keyStoreEncoded, keyStoreEncodedFromCredential);
 
-                File f = File.createTempFile("copy_of_test-geni", ".jks");
+        File f = File.createTempFile("copy_of_test-geni", ".jks");
         f.deleteOnExit();
-        
+
         String copyTestCredentialPath = f.getAbsolutePath();
         Converter.decodeBase64BToFile(keyStoreEncodedFromCredential, copyTestCredentialPath);
 
@@ -350,8 +453,13 @@ public class ServiceTests {
 
         assertEquals(keystorFileChecksum, keystorFileCopyChecksum);
     }
+    
+    @Test
+    public void testsaveCredential() throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException{
+        this.saveCredential();
+    }
 
-    public String saveCredential() throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+    public String saveCredential() throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException {
         Logger.getLogger(ServiceTests.class.getName()).log(Level.INFO, "saveCredential");
         Credential document = new Credential();
         document.setCloudProviderName("exogeni");
@@ -383,7 +491,7 @@ public class ServiceTests {
      * @throws com.fasterxml.jackson.core.JsonProcessingException
      */
     @Test
-    public void testCredentialServiceDeleteByID() throws JsonProcessingException, UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+    public void testCredentialServiceDeleteByID() throws JsonProcessingException, UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException {
         Logger.getLogger(ServiceTests.class.getName()).log(Level.INFO, "deleteByID");
         String id = saveCredential();
         credentialService.deleteByID(id);
@@ -399,9 +507,12 @@ public class ServiceTests {
 
     /**
      * Test of getAllIds method, of class CredentialService.
+     * @throws java.io.UnsupportedEncodingException
+     * @throws java.security.NoSuchAlgorithmException
+     * @throws javax.crypto.NoSuchPaddingException
      */
     @Test
-    public void testCredentialServiceGetAllIds() throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+    public void testCredentialServiceGetAllIds() throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException {
         Logger.getLogger(ServiceTests.class.getName()).log(Level.INFO, "getAllIds");
         testCredentialServiceDeleteAll();
         int numOfINst = 3;
@@ -423,13 +534,13 @@ public class ServiceTests {
     }
 
     @Test
-    public void testSetProvisionerOperation() throws FileNotFoundException, IOException, MissingCredentialsException, ApiException, TypeExeption, JsonProcessingException, TimeoutException, InterruptedException, NotFoundException, MissingVMTopologyException, UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+    public void testSetProvisionerOperation() throws FileNotFoundException, IOException, MissingCredentialsException, ApiException, TypeExeption, JsonProcessingException, TimeoutException, InterruptedException, NotFoundException, MissingVMTopologyException, UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException {
         if (ToscaHelper.isServiceUp(sureToscaBasePath) && ToscaHelper.isServiceUp("http://" + messageBrokerHost + ":15672")) {
 
             addRandomCredential("ExoGENI");
             addRandomCredential("EC2");
 
-            FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/application_example_planed.yaml"));
+            FileInputStream in = new FileInputStream(downloadFile("https://raw.githubusercontent.com/qcdis-sdia/sdia-tosca/master/examples/articonf/TIC_ec2_wf_with_bank.yaml"));
 
             MultipartFile file = new MockMultipartFile("file", in);
             String id = toscaTemplateService.saveFile(file);
@@ -444,8 +555,8 @@ public class ServiceTests {
             for (NodeTemplateMap vmTopology : vmTopologies) {
                 Map<String, Object> attributes = vmTopology.getNodeTemplate().getAttributes();
                 assertNotNull(attributes);
-                Assert.assertTrue(attributes.containsKey("credential"));
-                assertNotNull(attributes.get("credential"));
+                Assert.assertTrue(attributes.containsKey("credentials"));
+                assertNotNull(attributes.get("credentials"));
                 toscaTemplate = dripService.setDesieredSate(toscaTemplate, vmTopology, Constants.NODE_STATES.RUNNING);
             }
 
@@ -456,17 +567,19 @@ public class ServiceTests {
                 if (node.getType().equals(VM_TOPOLOGY)) {
                     Map<String, Object> attributes = node.getAttributes();
                     assertNotNull(attributes);
-                    Assert.assertTrue(attributes.containsKey("credential"));
-                    assertNotNull(attributes.get("credential"));
+                    Assert.assertTrue(attributes.containsKey("credentials"));
+                    assertNotNull(attributes.get("credentials"));
                     Assert.assertTrue(attributes.containsKey("desired_state"));
                     assertNotNull(attributes.get("desired_state"));
+                    Assert.assertEquals(attributes.get("desired_state"),Constants.NODE_STATES.RUNNING.toString());
+                    Assert.assertEquals(attributes.get("current_state"),Constants.NODE_STATES.UNDEFINED.toString());
                 }
             }
 
         }
     }
 
-    private void addRandomCredential(String providerName) throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+    private void addRandomCredential(String providerName) throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException {
         Credential document = new Credential();
         document.setCloudProviderName(providerName);
         Map<String, String> keys = new HashMap<>();
