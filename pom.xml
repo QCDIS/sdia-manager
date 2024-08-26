@@ -9,7 +9,7 @@
         <java.version>1.8</java.version>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
-        <springfox-version>2.9.2</springfox-version>
+        <springfox-version>2.10.0</springfox-version>
         <docker.image.prefix>qcdis</docker.image.prefix>
     </properties>
     <parent>
